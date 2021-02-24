@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+
+	"gopkg.in/yaml.v2"
 )
 
 const HashcacheFilename = ".hashCache.json"
@@ -18,14 +20,29 @@ type HashCache struct {
 	Hash []byte `json:"hash"`
 }
 
+type Config struct {
+	Functions []struct {
+		Name string `yaml:"name"`
+		Path string `yaml:"path"`
+	} `yaml:"functions"`
+}
 var hashCache []HashCache
 
 var newHashCache []HashCache
 var hashCacheLock sync.RWMutex
 
 func main() {
-	dirs := []string{
-		"path/to/function",
+
+	// read function files
+	b, err := readFile("functions.yaml")
+	if err != nil {
+		log.Println(err)
+	}
+
+	var config Config
+	err = yaml.Unmarshal(b, &config)
+	if err != nil {
+		log.Println(err)
 	}
 
 	// check if file exists
@@ -39,14 +56,13 @@ func main() {
 		if err != nil {
 			log.Println(err)
 		}
-
 	}
 
 	var wg sync.WaitGroup
 
-	for _, path := range dirs {
+	for _, function := range config.Functions {
 		wg.Add(1)
-		go build(path, &wg)
+		go build(function.Name, function.Path, &wg)
 	}
 
 	wg.Wait()
@@ -70,7 +86,7 @@ func main() {
 
 }
 
-func build(path string, wg *sync.WaitGroup) {
+func build(name string, path string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// Compiling go binary
@@ -85,7 +101,7 @@ func build(path string, wg *sync.WaitGroup) {
 	err := cmd.Run()
 
 	if err != nil {
-		log.Printf("Error compiling - %v: %v", path, err)
+		log.Printf("Error compiling - %v: %v", name, err)
 		return
 	}
 
@@ -109,7 +125,7 @@ func build(path string, wg *sync.WaitGroup) {
 		return
 	}
 
-	log.Printf("rebuilding %v", path)
+	log.Printf("rebuilding %v", name)
 
 	// Archiving into zip file
 
@@ -121,7 +137,7 @@ func build(path string, wg *sync.WaitGroup) {
 	err = cmd.Run()
 
 	if err != nil {
-		log.Printf("Error archiving - %v: %v", path, err)
+		log.Printf("Error archiving - %v: %v", name, err)
 		return
 	}
 

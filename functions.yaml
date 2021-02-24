@@ -1,0 +1,5 @@
+functions:
+  - path: example/functions/example1
+    name: example1
+  - path: example/functions/example2
+    name: example2
