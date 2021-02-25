@@ -7,4 +7,6 @@ const (
 	ErrCompiling = "Error compiling - %v: %v"
 
 	InfoRebuilding = "Rebuilding function: %v"
+
+	HashcacheFilename = ".kikoCache.json"
 )

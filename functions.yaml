@@ -1,8 +1,8 @@
 backend:
   config:
-    bucket: kikobackend
+    bucket:
     key:
-    region: eu-central-1
+    region:
 
 functions:
   - path: example/functions/example1

@@ -9,8 +9,6 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const HashcacheFilename = ".kikoCache.json"
-
 type HashCache struct {
 	Cache []Cache
 }
@@ -34,14 +32,13 @@ type Config struct {
 	}
 }
 
-var config Config
-
-var hashCache HashCache
-
-var newHashCache HashCache
-
-var useLocalFile bool
-var hashCacheLock sync.RWMutex
+var (
+	config Config
+	hashCache HashCache
+	newHashCache HashCache
+	useLocalFile bool
+	hashCacheLock sync.RWMutex
+)
 
 func main() {
 
@@ -56,6 +53,7 @@ func main() {
 		log.Println(err)
 	}
 
+	// check if backend config is empty
 	if config.Backend.Config.Bucket == "" || config.Backend.Config.Region == "" {
 		useLocalFile = true
 	}
@@ -70,6 +68,7 @@ func main() {
 		go build(function.Name, function.Path, &wg)
 	}
 
+	// wait till all goroutines are finished
 	wg.Wait()
 
 	// saves hashCache to local or s3
@@ -95,7 +94,7 @@ func build(name string, path string, wg *sync.WaitGroup) {
 	err := cmd.Run()
 
 	if err != nil {
-		log.Print(ErrCompiling, name, err)
+		log.Printf(ErrCompiling, name, err)
 		return
 	}
 
