@@ -1,34 +1,46 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"sync"
 
 	"gopkg.in/yaml.v2"
 )
 
-const HashcacheFilename = ".hashCache.json"
+const HashcacheFilename = ".kikoCache.json"
 
 type HashCache struct {
+	Cache []Cache
+}
+
+type Cache struct {
 	Path string `json:"path"`
 	Hash []byte `json:"hash"`
 }
 
 type Config struct {
+	Backend struct {
+		Config struct {
+			Bucket string `yaml:"bucket"`
+			Key    string `yaml:"key"`
+			Region string `yaml:"region"`
+		}
+	}
 	Functions []struct {
 		Name string `yaml:"name"`
 		Path string `yaml:"path"`
-	} `yaml:"functions"`
+	}
 }
-var hashCache []HashCache
 
-var newHashCache []HashCache
+var config Config
+
+var hashCache HashCache
+
+var newHashCache HashCache
+
+var useLocalFile bool
 var hashCacheLock sync.RWMutex
 
 func main() {
@@ -39,24 +51,17 @@ func main() {
 		log.Println(err)
 	}
 
-	var config Config
 	err = yaml.Unmarshal(b, &config)
 	if err != nil {
 		log.Println(err)
 	}
 
-	// check if file exists
-	if fileExists(HashcacheFilename) {
-		b, err := readFile(HashcacheFilename)
-		if err != nil {
-			log.Println(err)
-		}
-
-		err = json.Unmarshal(b, &hashCache)
-		if err != nil {
-			log.Println(err)
-		}
+	if config.Backend.Config.Bucket == "" || config.Backend.Config.Region == "" {
+		useLocalFile = true
 	}
+
+	// gets hashCache from local or s3
+	err = GetCache()
 
 	var wg sync.WaitGroup
 
@@ -67,19 +72,8 @@ func main() {
 
 	wg.Wait()
 
-	f, err := json.MarshalIndent(newHashCache, "", "	")
-	if err != nil {
-		log.Println(err)
-	}
-
-
-	pwd, _ := os.Getwd()
-	err = os.Remove(fmt.Sprintf("%v/%v", pwd, HashcacheFilename))
-	if err != nil {
-		log.Println(err)
-	}
-
-	err = os.WriteFile(HashcacheFilename, f, 0644)
+	// saves hashCache to local or s3
+	err = SaveCache()
 	if err != nil {
 		log.Println(err)
 	}
@@ -101,12 +95,11 @@ func build(name string, path string, wg *sync.WaitGroup) {
 	err := cmd.Run()
 
 	if err != nil {
-		log.Printf("Error compiling - %v: %v", name, err)
+		log.Print(ErrCompiling, name, err)
 		return
 	}
 
 	// Cache stuff
-
 	cachedHash, err := getHashFromCache(path)
 	if err != nil {
 		log.Println(err)
@@ -119,16 +112,15 @@ func build(name string, path string, wg *sync.WaitGroup) {
 	}
 
 	if string(cachedHash) == string(hash) {
-		hashCacheLock.Lock()
-		newHashCache = append(newHashCache, HashCache{Path: path, Hash: hash})
-		hashCacheLock.Unlock()
+		d := Cache{Path: path, Hash: hash}
+
+		newHashCache.appendToCache(d)
 		return
 	}
 
-	log.Printf("rebuilding %v", name)
+	log.Printf(InfoRebuilding, name)
 
 	// Archiving into zip file
-
 	cmd = exec.Command("zip",
 		fmt.Sprintf("%v/archive.zip", path),
 		fmt.Sprintf("%v/main", path),
@@ -137,7 +129,7 @@ func build(name string, path string, wg *sync.WaitGroup) {
 	err = cmd.Run()
 
 	if err != nil {
-		log.Printf("Error archiving - %v: %v", name, err)
+		log.Printf(ErrArchiving, name, err)
 		return
 	}
 
@@ -147,54 +139,6 @@ func build(name string, path string, wg *sync.WaitGroup) {
 		log.Println(err)
 	}
 
-	d := HashCache{Path: path, Hash: hash}
-
-	hashCacheLock.Lock()
-	newHashCache = append(newHashCache, d)
-	hashCacheLock.Unlock()
-}
-
-func fileExists(filename string) bool {
-	if _, err := os.Stat(filename); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
-}
-
-func readFile(filename string) (b []byte, err error) {
-	info, err := os.Stat(filename)
-	if err != nil {
-		return b, err
-	}
-
-	b = make([]byte, info.Size())
-	f, err := os.Open(filename)
-	if err != nil {
-		return b, err
-	}
-
-	_, err = f.Read(b)
-	if err != nil {
-		return b, err
-	}
-
-	return b, err
-}
-
-func hashBytes(b []byte) []byte {
-	h := sha256.New()
-	h.Write(b)
-	return h.Sum(nil)
-}
-
-func getHashFromCache(path string) ([]byte, error) {
-	for _, hash := range hashCache {
-		if hash.Path == path {
-			return hash.Hash, nil
-		}
-	}
-
-	return *new([]byte), errors.New("path not found in hashCache")
+	d := Cache{Path: path, Hash: hash}
+	newHashCache.appendToCache(d)
 }

@@ -1,3 +1,9 @@
+backend:
+  config:
+    bucket: kikobackend
+    key:
+    region: eu-central-1
+
 functions:
   - path: example/functions/example1
     name: example1
