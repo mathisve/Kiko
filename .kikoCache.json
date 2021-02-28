@@ -1,10 +1,12 @@
-[
-	{
-		"path": "example/functions/example2",
-		"hash": "BnRzMSnski3Hs8seD2MXHVN/WorHTdp2UtajASP7dJQ="
-	},
-	{
-		"path": "example/functions/example1",
-		"hash": "CUlXkyCBUET+O+Q3a3kFac0bLH/ZVAVsfgBlbrcqpA4="
-	}
-]
+{
+	"Cache": [
+		{
+			"path": "example/functions/example1",
+			"hash": "juwn6Jeni2upjPNIgWrDAKW1tCtS9RIl4o2hgOYOadw="
+		},
+		{
+			"path": "example/functions/example2",
+			"hash": "wNKo0KM0N2JK5N9pCmvhPTLZJmOb0ibOBk8uRHXIfAU="
+		}
+	]
+}

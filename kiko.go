@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"sync"
 
@@ -11,6 +12,7 @@ import (
 
 type HashCache struct {
 	Cache []Cache
+	lock sync.RWMutex
 }
 
 type Cache struct {
@@ -34,10 +36,7 @@ type Config struct {
 
 var (
 	config Config
-	hashCache HashCache
-	newHashCache HashCache
 	useLocalFile bool
-	hashCacheLock sync.RWMutex
 )
 
 func main() {
@@ -59,32 +58,42 @@ func main() {
 	}
 
 	// gets hashCache from local or s3
-	err = GetCache()
+	cache, err := GetCache()
+	if err != nil {
+		log.Println(err)
+	}
+
+	var newCache HashCache
 
 	var wg sync.WaitGroup
 
 	for _, function := range config.Functions {
 		wg.Add(1)
-		go build(function.Name, function.Path, &wg)
+		go build(&cache, &newCache, function.Name, function.Path, &wg)
 	}
 
 	// wait till all goroutines are finished
 	wg.Wait()
 
 	// saves hashCache to local or s3
-	err = SaveCache()
+	err = newCache.Save()
 	if err != nil {
 		log.Println(err)
 	}
 
 }
 
-func build(name string, path string, wg *sync.WaitGroup) {
+func build(cache *HashCache, newCache *HashCache, name string, path string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// Compiling go binary
 
-	cmd := exec.Command("go",
+	os.Setenv("GOOS", "linux")
+	os.Setenv("GOARCH","amd64")
+	os.Setenv("CGO_ENABLED", "0")
+
+	cmd := exec.Command(
+		"go",
 		"build",
 		"-o",
 		fmt.Sprintf("%v/main", path),
@@ -99,7 +108,7 @@ func build(name string, path string, wg *sync.WaitGroup) {
 	}
 
 	// Cache stuff
-	cachedHash, err := getHashFromCache(path)
+	cachedHash, err := cache.getHashFromCache(path)
 	if err != nil {
 		log.Println(err)
 	}
@@ -113,7 +122,7 @@ func build(name string, path string, wg *sync.WaitGroup) {
 	if string(cachedHash) == string(hash) {
 		d := Cache{Path: path, Hash: hash}
 
-		newHashCache.appendToCache(d)
+		newCache.appendToCache(d)
 		return
 	}
 
@@ -138,6 +147,7 @@ func build(name string, path string, wg *sync.WaitGroup) {
 		log.Println(err)
 	}
 
+
 	d := Cache{Path: path, Hash: hash}
-	newHashCache.appendToCache(d)
+	newCache.appendToCache(d)
 }

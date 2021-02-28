@@ -27,26 +27,27 @@ func getS3() (svc *s3.S3, err error) {
 	return svc, err
 }
 
-func GetCache() (err error) {
+//goland:noinspection ALL
+func GetCache() (cache HashCache, err error) {
 	if useLocalFile {
 		if fileExists(HashcacheFilename) {
 			b, err := readFile(HashcacheFilename)
 			if err != nil {
-				return err
+				return cache, err
 			}
 
-			err = json.Unmarshal(b, &hashCache)
+			err = json.Unmarshal(b, &cache)
 			if err != nil {
-				return err
+				return cache, err
 			}
 		}
 
-		return err
+		return cache, err
 	}
 
 	svc, err := getS3()
 	if err != nil {
-		return err
+		return cache, err
 	}
 
 	result, err := svc.GetObject(&s3.GetObjectInput{
@@ -57,42 +58,39 @@ func GetCache() (err error) {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchKey:
-				return errors.New(ErrFileDoesNotExist)
+				return cache, errors.New(ErrFileDoesNotExist)
 			case s3.ErrCodeInvalidObjectState:
-				return errors.New(s3.ErrCodeInvalidObjectState)
+				return cache, errors.New(s3.ErrCodeInvalidObjectState)
 			default:
-				return aerr
+				return cache, aerr
 			}
 		} else {
-			return aerr
+			return cache, aerr
 		}
 	}
 
 	// unmarshal content into hashCache
 	b, err := ioutil.ReadAll(result.Body)
 	if err != nil {
-		return err
+		return cache, err
 	}
 
-	err = json.Unmarshal(b, &hashCache)
+	err = json.Unmarshal(b, &cache)
 	if err != nil {
-		return err
+		return cache, err
 	}
 
-	return err
+	return cache, err
 }
 
-func SaveCache() (err error) {
-	f, err := json.MarshalIndent(newHashCache, "", "	")
+func (cache *HashCache) Save() (err error) {
+	f, err := json.MarshalIndent(cache, "", "	")
 	if err != nil {
 		return err
 	}
 
 	if useLocalFile {
-		err = os.Remove(HashcacheFilename)
-		if err != nil {
-			return err
-		}
+		_ = os.Remove(HashcacheFilename)
 
 		err = os.WriteFile(HashcacheFilename, f, 0644)
 		if err != nil {
@@ -163,8 +161,11 @@ func hashBytes(b []byte) []byte {
 	return h.Sum(nil)
 }
 
-func getHashFromCache(path string) ([]byte, error) {
-	for _, hash := range hashCache.Cache {
+func (cache *HashCache) getHashFromCache(path string) ([]byte, error) {
+	cache.lock.RLock()
+	defer cache.lock.RUnlock()
+
+	for _, hash := range cache.Cache {
 		if hash.Path == path {
 			return hash.Hash, nil
 		}
@@ -173,9 +174,10 @@ func getHashFromCache(path string) ([]byte, error) {
 	return *new([]byte), errors.New(ErrPathNotFound)
 }
 
-func (cache HashCache) appendToCache(d Cache) {
-	hashCacheLock.Lock()
-	defer hashCacheLock.Unlock()
+func (cache *HashCache) appendToCache(d Cache) {
+	cache.lock.Lock()
+	defer cache.lock.Unlock()
 
-	newHashCache.Cache = append(newHashCache.Cache, d)
+	cache.Cache = append(cache.Cache, d)
+
 }
