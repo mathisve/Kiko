@@ -10,16 +10,18 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type HashCache struct {
-	Cache []Cache
-	lock sync.RWMutex
+type hashCache struct {
+	Cache []cache
+	lock  sync.RWMutex
 }
 
-type Cache struct {
+// cache is the internal cache kiko users
+type cache struct {
 	Path string `json:"path"`
 	Hash []byte `json:"hash"`
 }
 
+// Config is the local kiko config, currently in functions.yaml
 type Config struct {
 	Backend struct {
 		Config struct {
@@ -35,7 +37,7 @@ type Config struct {
 }
 
 var (
-	config Config
+	config       Config
 	useLocalFile bool
 )
 
@@ -58,12 +60,12 @@ func main() {
 	}
 
 	// gets hashCache from local or s3
-	cache, err := GetCache()
+	cache, err := getCache()
 	if err != nil {
 		log.Println(err)
 	}
 
-	var newCache HashCache
+	var newCache hashCache
 
 	var wg sync.WaitGroup
 
@@ -76,20 +78,20 @@ func main() {
 	wg.Wait()
 
 	// saves hashCache to local or s3
-	err = newCache.Save()
+	err = newCache.save()
 	if err != nil {
 		log.Println(err)
 	}
 
 }
 
-func build(cache *HashCache, newCache *HashCache, name string, path string, wg *sync.WaitGroup) {
+func build(hashCache *hashCache, newCache *hashCache, name string, path string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	// Compiling go binary
 
 	os.Setenv("GOOS", "linux")
-	os.Setenv("GOARCH","amd64")
+	os.Setenv("GOARCH", "amd64")
 	os.Setenv("CGO_ENABLED", "0")
 
 	cmd := exec.Command(
@@ -108,7 +110,7 @@ func build(cache *HashCache, newCache *HashCache, name string, path string, wg *
 	}
 
 	// Cache stuff
-	cachedHash, err := cache.getHashFromCache(path)
+	cachedHash, err := hashCache.getHashFromCache(path)
 	if err != nil {
 		log.Println(err)
 	}
@@ -120,7 +122,7 @@ func build(cache *HashCache, newCache *HashCache, name string, path string, wg *
 	}
 
 	if string(cachedHash) == string(hash) {
-		d := Cache{Path: path, Hash: hash}
+		d := cache{Path: path, Hash: hash}
 
 		newCache.appendToCache(d)
 		return
@@ -147,7 +149,6 @@ func build(cache *HashCache, newCache *HashCache, name string, path string, wg *
 		log.Println(err)
 	}
 
-
-	d := Cache{Path: path, Hash: hash}
+	d := cache{Path: path, Hash: hash}
 	newCache.appendToCache(d)
 }

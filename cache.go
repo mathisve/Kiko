@@ -28,10 +28,10 @@ func getS3() (svc *s3.S3, err error) {
 }
 
 //goland:noinspection ALL
-func GetCache() (cache HashCache, err error) {
+func getCache() (cache hashCache, err error) {
 	if useLocalFile {
-		if fileExists(HashcacheFilename) {
-			b, err := readFile(HashcacheFilename)
+		if fileExists(HashCacheFilename) {
+			b, err := readFile(HashCacheFilename)
 			if err != nil {
 				return cache, err
 			}
@@ -52,7 +52,7 @@ func GetCache() (cache HashCache, err error) {
 
 	result, err := svc.GetObject(&s3.GetObjectInput{
 		Bucket: &config.Backend.Config.Bucket,
-		Key:    aws.String(fmt.Sprintf("%v/%v", config.Backend.Config.Key, HashcacheFilename)),
+		Key:    aws.String(fmt.Sprintf("%v/%v", config.Backend.Config.Key, HashCacheFilename)),
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -83,16 +83,16 @@ func GetCache() (cache HashCache, err error) {
 	return cache, err
 }
 
-func (cache *HashCache) Save() (err error) {
+func (cache *hashCache) save() (err error) {
 	f, err := json.MarshalIndent(cache, "", "	")
 	if err != nil {
 		return err
 	}
 
 	if useLocalFile {
-		_ = os.Remove(HashcacheFilename)
+		_ = os.Remove(HashCacheFilename)
 
-		err = os.WriteFile(HashcacheFilename, f, 0644)
+		err = os.WriteFile(HashCacheFilename, f, 0644)
 		if err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (cache *HashCache) Save() (err error) {
 	_, err = svc.PutObject(&s3.PutObjectInput{
 		Body:   bytes.NewReader(f),
 		Bucket: &config.Backend.Config.Bucket,
-		Key:    aws.String(fmt.Sprintf("%v/%v", config.Backend.Config.Key, HashcacheFilename)),
+		Key:    aws.String(fmt.Sprintf("%v/%v", config.Backend.Config.Key, HashCacheFilename)),
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
@@ -161,7 +161,7 @@ func hashBytes(b []byte) []byte {
 	return h.Sum(nil)
 }
 
-func (cache *HashCache) getHashFromCache(path string) ([]byte, error) {
+func (cache *hashCache) getHashFromCache(path string) ([]byte, error) {
 	cache.lock.RLock()
 	defer cache.lock.RUnlock()
 
@@ -174,7 +174,7 @@ func (cache *HashCache) getHashFromCache(path string) ([]byte, error) {
 	return *new([]byte), errors.New(ErrPathNotFound)
 }
 
-func (cache *HashCache) appendToCache(d Cache) {
+func (cache *hashCache) appendToCache(d cache) {
 	cache.lock.Lock()
 	defer cache.lock.Unlock()
 
