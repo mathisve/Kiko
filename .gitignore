@@ -1,4 +1,9 @@
+# golang ide stuff
 .idea/
 
+# individual functions
 main
 archive.zip
+
+# kiko binary
+kiko
